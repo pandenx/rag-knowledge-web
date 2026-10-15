@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>AI对话演示</title>
+  <style>
+    * {box-sizing: border-box;margin:0;padding:0;font-family:system-ui}
+    body{max-width:850px;margin:30px auto;padding:0 20px}
+    #chat-box{border:1px solid #ddd;height:520px;overflow-y:auto;padding:16px;border-radius:8px;margin-bottom:16px}
+    .msg{margin:10px 0;max-width:75%}
+    .user{margin-left:auto;text-align:right}
+    .msg-bubble{padding:12px 16px;border-radius:14px;white-space:pre-wrap;line-height:1.5}
+    .user .msg-bubble{background:#007bff;color:#fff}
+    .ai .msg-bubble{background:#f1f1f1;color:#222;text-align:left}
+    .input-area{display:flex;gap:10px}
+    #input{flex:1;padding:14px;border:1px solid #ddd;border-radius:8px;outline:none;font-size:16px;resize:none}
+    #send{padding:14px 24px;background:#007bff;color:white;border:none;border-radius:8px;cursor:pointer;font-size:16px}
+    #clear{padding:14px 20px;background:#dc3545;color:white;border:none;border-radius:8px;cursor:pointer;font-size:16px}
+    .loading-dot::after{
+      content:'';
+      animation: dot 1.4s infinite;
+    }
+    @keyframes dot{
+      0%{content:''}
+      25%{content:'.'}
+      50%{content:'..'}
+      75%{content:'...'}
+    }
+  </style>
+</head>
+<body>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h2>AI对话演示</h2>
+    <button id="clear">清空对话</button>
+  </div>
+  <div id="chat-box"></div>
+  <div class="input-area">
+    <textarea id="input" placeholder="Enter发送消息｜Shift+Enter换行"></textarea>
+    <button id="send">发送</button>
+  </div>
+
+  <script>
+    const chatBox = document.getElementById('chat-box');
+    const input = document.getElementById('input');
+    const sendBtn = document.getElementById('send');
+    const clearBtn = document.getElementById('clear');
+
+    // 滑动窗口：最多保留4条消息（2组一问一答）
+    const MAX_HISTORY = 4;
+    const historyMessages = [];
+
+    function addMessage(text, isUser) {
+      const div = document.createElement('div');
+      div.className = `msg ${isUser ? 'user' : 'ai'}`;
+      div.innerHTML = `<div class="msg-bubble">${text}</div>`;
+      chatBox.appendChild(div);
+      chatBox.scrollTop = chatBox.scrollHeight;
+      return div;
+    }
+
+    function showWelcome() {
+      addMessage("嗨~ 这是在做交互测试吗😊 不管你是想解决数学问题、找创意灵感、捋清学习/工作的思路，还是单纯想唠唠，都可以把具体的需求告诉我呀，我会尽力帮到你的~", false);
+    }
+    showWelcome();
+
+    // 新增消息，自动裁剪旧消息
+    function pushMsg(role, content) {
+      historyMessages.push({ role, content });
+      while (historyMessages.length > MAX_HISTORY) {
+        historyMessages.shift();
+      }
+    }
+
+    sendBtn.onclick = async () => {
+      const prompt = input.value.trim();
+      if (!prompt) return;
+      addMessage(prompt, true);
+      input.value = '';
+      sendBtn.disabled = true;
+
+      pushMsg("user", prompt);
+
+      const loadingEl = addMessage('<span class="loading-dot">AI正在思考</span>', false);
+
+      try {
+        const res = await fetch('http://localhost:3000/chat', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ messages: historyMessages })
+        });
+        const data = await res.json();
+        const answer = data.choices[0].message.content;
+        pushMsg("assistant", answer);
+        loadingEl.querySelector('.msg-bubble').innerText = answer;
+      } catch(err) {
+        loadingEl.querySelector('.msg-bubble').innerText = '请求出错！';
+        console.error(err);
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    // Enter发送，Shift+Enter换行
+    input.addEventListener('keydown', e => {
+      if(e.key === 'Enter'){
+        if(e.shiftKey){
+          return;
+        }else{
+          e.preventDefault();
+          sendBtn.click();
+        }
+      }
+    })
+
+    // 清空对话按钮
+    clearBtn.onclick = () => {
+      historyMessages.length = 0;
+      chatBox.innerHTML = '';
+      showWelcome()
+    }
+  </script>
+</body>
+</html>
